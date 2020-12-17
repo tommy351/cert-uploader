@@ -4,6 +4,8 @@ release:
   github:
     owner: tommy351
     name: cert-uploader
+  extra_files:
+    - glob: ./assets/dist/cert-uploader-deployment.yml
   prerelease: auto
 
 builds:

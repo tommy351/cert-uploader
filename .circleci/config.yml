@@ -47,7 +47,7 @@ jobs:
           name: Generate versioned deployment file
           command: |
             mkdir -p assets/dist
-            ./hack/generate-versioned-deployment.sh $(echo $CIRCLE_TAG | sed 's/^v//') > ./assets/dist/pullup-deployment.yml
+            ./hack/generate-versioned-deployment.sh $(echo $CIRCLE_TAG | sed 's/^v//') > ./assets/dist/cert-uploader-deployment.yml
       - run:
           name: Release
           command: curl -sL https://git.io/goreleaser | bash -s -- --release-notes <(git-chglog $CIRCLE_TAG)
