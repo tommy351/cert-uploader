@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/tommy351/cert-uploader/pkg/apis/certuploader/v1alpha1"
@@ -38,6 +39,18 @@ type CloudFlareCustomCertificateResponse struct {
 	Success bool                              `json:"success"`
 	Errors  []CloudFlareResponseError         `json:"errors"`
 	Result  CloudFlareCustomCertificateResult `json:"result"`
+}
+
+type CloudFlareResponseErrors []CloudFlareResponseError
+
+func (c CloudFlareResponseErrors) Error() string {
+	lines := make([]string, len(c))
+
+	for i, e := range c {
+		lines[i] = fmt.Sprintf("%d: %s", e.Code, e.Message)
+	}
+
+	return fmt.Sprintf("response errors: \n%s", strings.Join(lines, "\n"))
 }
 
 type CloudFlareResponseError struct {
@@ -86,7 +99,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		Namespace: cu.Namespace,
 		Name:      cu.Spec.CertificateName,
 	}, cert); err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("failed to get certificate: %w", err)
 	}
 
 	if cert.Type != corev1.SecretTypeTLS {
@@ -116,42 +129,35 @@ func (r *Reconciler) uploadToCloudFlare(ctx context.Context, cu *v1alpha1.Certif
 		Namespace: cu.Namespace,
 		Name:      apiTokenRef.Name,
 	}, apiToken); err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("failed to get API token: %w", err)
 	}
 
-	var req *http.Request
+	var (
+		req *http.Request
+		buf bytes.Buffer
+		err error
+	)
+
+	reqBody := CloudFlareCustomCertificateRequest{
+		Certificate:  string(cert.Data[corev1.TLSCertKey]),
+		PrivateKey:   string(cert.Data[corev1.TLSPrivateKeyKey]),
+		BundleMethod: cu.Spec.CloudFlare.BundleMethod,
+		Type:         cu.Spec.CloudFlare.Type,
+	}
 
 	if cu.Status.CloudFlare != nil {
-		var buf bytes.Buffer
-		err := json.NewEncoder(&buf).Encode(CloudFlareCustomCertificateRequest{
-			Certificate:  string(cert.Data[corev1.TLSCertKey]),
-			PrivateKey:   string(cert.Data[corev1.TLSPrivateKeyKey]),
-			BundleMethod: cu.Spec.CloudFlare.BundleMethod,
-			Type:         cu.Spec.CloudFlare.Type,
-		})
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
 		req, err = http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/zones/%s/custom_certificates/%s", CloudFlareEndpoint, cu.Spec.CloudFlare.ZoneID, cu.Status.CloudFlare.CertificateID), &buf)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
 	} else {
-		var buf bytes.Buffer
-		err := json.NewEncoder(&buf).Encode(CloudFlareCustomCertificateRequest{
-			Certificate:  string(cert.Data[corev1.TLSCertKey]),
-			PrivateKey:   string(cert.Data[corev1.TLSPrivateKeyKey]),
-			BundleMethod: cu.Spec.CloudFlare.BundleMethod,
-		})
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
+		reqBody.Type = ""
 		req, err = http.NewRequest(http.MethodPost, fmt.Sprintf("%s/zones/%s/custom_certificates", CloudFlareEndpoint, cu.Spec.CloudFlare.ZoneID), &buf)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
+	}
+
+	if err := json.NewEncoder(&buf).Encode(&reqBody); err != nil {
+		return reconcile.Result{}, fmt.Errorf("encode failed: %w", err)
+	}
+
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to create http request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -162,7 +168,7 @@ func (r *Reconciler) uploadToCloudFlare(ctx context.Context, cu *v1alpha1.Certif
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("request failed: %w", err)
 	}
 
 	defer res.Body.Close()
@@ -170,13 +176,13 @@ func (r *Reconciler) uploadToCloudFlare(ctx context.Context, cu *v1alpha1.Certif
 	var body CloudFlareCustomCertificateResponse
 
 	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("decode failed: %w", err)
 	}
 
 	logger.V(1).Info("Request sent to CloudFlare", "responseBody", body, "responseStatus", res.StatusCode)
 
 	if len(body.Errors) > 0 {
-		return reconcile.Result{}, fmt.Errorf("response error: %+v", body.Errors)
+		return reconcile.Result{}, CloudFlareResponseErrors(body.Errors)
 	}
 
 	cu.Status.CertificateResourceVersion = cert.ResourceVersion
@@ -188,7 +194,7 @@ func (r *Reconciler) uploadToCloudFlare(ctx context.Context, cu *v1alpha1.Certif
 	}
 
 	if err := r.Client.Status().Update(ctx, cu); err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("failed to update resource status: %w", err)
 	}
 
 	return reconcile.Result{}, nil

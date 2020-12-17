@@ -16,6 +16,7 @@ import (
 // +kubebuilder:rbac:groups="",namespace=cert-uploader,resources=configmaps,verbs=get;create;update
 // +kubebuilder:rbac:groups="coordination.k8s.io",namespace=cert-uploader,resources=leases,verbs=get;create;update
 
+// nolint: gochecknoinits
 func init() {
 	log.SetLogger(zap.New())
 }
