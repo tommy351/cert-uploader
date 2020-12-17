@@ -1,0 +1,49 @@
+project_name: cert-uploader
+
+release:
+  github:
+    owner: tommy351
+    name: cert-uploader
+  prerelease: auto
+
+builds:
+  - id: cert-uploader
+    binary: cert-uploader
+    goos:
+      - darwin
+      - windows
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    main: ./cmd
+
+archives:
+  - format: tar.gz
+    name_template: '{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: '{{ .ProjectName }}-checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^ci:'
+      - '^docs:'
+      - '^test:'
+
+dockers:
+  - binaries:
+      - cert-uploader
+    dockerfile: Dockerfile
+    image_templates:
+      - 'tommy351/cert-uploader:{{ .Version }}'
+      - 'tommy351/cert-uploader:{{ .Major }}.{{ .Minor }}'
+      - 'tommy351/cert-uploader:{{ .Major }}'
+      - 'tommy351/cert-uploader:latest'

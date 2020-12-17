@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cert-uploader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: controller
+      release: cert-uploader
+  template:
+    metadata:
+      labels:
+        app: controller
+        release: cert-uploader
+    spec:
+      containers:
+        - name: controller
+          image: tommy351/cert-uploader
+          imagePullPolicy: IfNotPresent
+      serviceAccountName: cert-uploader

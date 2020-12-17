@@ -1,0 +1,6 @@
+resources:
+  - crds/cert-uploader.dev_certificateuploads.yaml
+  - rbac/role.yaml
+  - service-account.yml
+  - rbac.yml
+  - deployment.yml
