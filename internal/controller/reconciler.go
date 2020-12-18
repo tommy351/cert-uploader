@@ -26,39 +26,39 @@ import (
 // +kubebuilder:rbac:groups=cert-uploader.dev,resources=certificateuploads,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cert-uploader.dev,resources=certificateuploads/status,verbs=get;update;patch
 
-const CloudFlareEndpoint = "https://api.cloudflare.com/client/v4"
+const cloudflareEndpoint = "https://api.cloudflare.com/client/v4"
 
-type CloudFlareCustomCertificateRequest struct {
+type cloudflareCustomCertificateRequest struct {
 	Certificate  string `json:"certificate"`
 	PrivateKey   string `json:"private_key"`
 	BundleMethod string `json:"bundle_method,omitempty"`
 	Type         string `json:"type,omitempty"`
 }
 
-type CloudFlareCustomCertificateResponse struct {
+type cloudflareCustomCertificateResponse struct {
 	Success bool                              `json:"success"`
-	Errors  []CloudFlareResponseError         `json:"errors"`
-	Result  CloudFlareCustomCertificateResult `json:"result"`
+	Errors  []cloudFlareResponseError         `json:"errors"`
+	Result  cloudFlareCustomCertificateResult `json:"result"`
 }
 
-type CloudFlareResponseErrors []CloudFlareResponseError
+type cloudflareResponseErrors []cloudFlareResponseError
 
-func (c CloudFlareResponseErrors) Error() string {
+func (c cloudflareResponseErrors) Error() string {
 	lines := make([]string, len(c))
 
 	for i, e := range c {
 		lines[i] = fmt.Sprintf("%d: %s", e.Code, e.Message)
 	}
 
-	return fmt.Sprintf("response errors: \n%s", strings.Join(lines, "\n"))
+	return fmt.Sprintf("cloudflare response errors: \n%s", strings.Join(lines, "\n"))
 }
 
-type CloudFlareResponseError struct {
+type cloudFlareResponseError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-type CloudFlareCustomCertificateResult struct {
+type cloudFlareCustomCertificateResult struct {
 	ID           string    `json:"id"`
 	Hosts        []string  `json:"hosts"`
 	Issuer       string    `json:"issuer"`
@@ -97,7 +97,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 
 	if err := r.Client.Get(ctx, types.NamespacedName{
 		Namespace: cu.Namespace,
-		Name:      cu.Spec.CertificateName,
+		Name:      cu.Spec.SecretName,
 	}, cert); err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to get certificate: %w", err)
 	}
@@ -106,7 +106,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, ErrInvalidSecretType
 	}
 
-	if cu.Spec.CloudFlare != nil {
+	if cu.Spec.Cloudflare != nil {
 		return r.uploadToCloudFlare(ctx, cu, cert)
 	}
 
@@ -116,13 +116,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 func (r *Reconciler) uploadToCloudFlare(ctx context.Context, cu *v1alpha1.CertificateUpload, cert *corev1.Secret) (reconcile.Result, error) {
 	logger := log.FromContext(ctx)
 
-	if cu.Status.CertificateResourceVersion == cert.ResourceVersion {
+	if cu.Status.SecretResourceVersion == cert.ResourceVersion {
 		logger.V(1).Info("Skip because the resource version is not changed")
 
 		return reconcile.Result{}, nil
 	}
 
-	apiTokenRef := cu.Spec.CloudFlare.APITokenSecretRef
+	apiTokenRef := cu.Spec.Cloudflare.APITokenSecretRef
 	apiToken := new(corev1.Secret)
 
 	if err := r.Client.Get(ctx, types.NamespacedName{
@@ -138,18 +138,18 @@ func (r *Reconciler) uploadToCloudFlare(ctx context.Context, cu *v1alpha1.Certif
 		err error
 	)
 
-	reqBody := CloudFlareCustomCertificateRequest{
+	reqBody := cloudflareCustomCertificateRequest{
 		Certificate:  string(cert.Data[corev1.TLSCertKey]),
 		PrivateKey:   string(cert.Data[corev1.TLSPrivateKeyKey]),
-		BundleMethod: cu.Spec.CloudFlare.BundleMethod,
-		Type:         cu.Spec.CloudFlare.Type,
+		BundleMethod: cu.Spec.Cloudflare.BundleMethod,
+		Type:         cu.Spec.Cloudflare.Type,
 	}
 
-	if cu.Status.CloudFlare != nil {
-		req, err = http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/zones/%s/custom_certificates/%s", CloudFlareEndpoint, cu.Spec.CloudFlare.ZoneID, cu.Status.CloudFlare.CertificateID), &buf)
+	if cu.Status.Cloudflare != nil {
+		req, err = http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/zones/%s/custom_certificates/%s", cloudflareEndpoint, cu.Spec.Cloudflare.ZoneID, cu.Status.Cloudflare.CertificateID), &buf)
 	} else {
 		reqBody.Type = ""
-		req, err = http.NewRequest(http.MethodPost, fmt.Sprintf("%s/zones/%s/custom_certificates", CloudFlareEndpoint, cu.Spec.CloudFlare.ZoneID), &buf)
+		req, err = http.NewRequest(http.MethodPost, fmt.Sprintf("%s/zones/%s/custom_certificates", cloudflareEndpoint, cu.Spec.Cloudflare.ZoneID), &buf)
 	}
 
 	if err := json.NewEncoder(&buf).Encode(&reqBody); err != nil {
@@ -161,10 +161,10 @@ func (r *Reconciler) uploadToCloudFlare(ctx context.Context, cu *v1alpha1.Certif
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Auth-Email", cu.Spec.CloudFlare.Email)
+	req.Header.Set("X-Auth-Email", cu.Spec.Cloudflare.Email)
 	req.Header.Set("X-Auth-Key", string(apiToken.Data[apiTokenRef.Key]))
 
-	logger.V(1).Info("About to send request to CloudFlare", "requestMethod", req.Method, "requestUrl", req.URL)
+	logger.V(1).Info("About to send request to Cloudflare", "requestMethod", req.Method, "requestUrl", req.URL)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -173,23 +173,23 @@ func (r *Reconciler) uploadToCloudFlare(ctx context.Context, cu *v1alpha1.Certif
 
 	defer res.Body.Close()
 
-	var body CloudFlareCustomCertificateResponse
+	var body cloudflareCustomCertificateResponse
 
 	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
 		return reconcile.Result{}, fmt.Errorf("decode failed: %w", err)
 	}
 
-	logger.V(1).Info("Request sent to CloudFlare", "responseBody", body, "responseStatus", res.StatusCode)
+	logger.V(1).Info("Request sent to Cloudflare", "responseBody", body, "responseStatus", res.StatusCode)
 
 	if len(body.Errors) > 0 {
-		return reconcile.Result{}, CloudFlareResponseErrors(body.Errors)
+		return reconcile.Result{}, cloudflareResponseErrors(body.Errors)
 	}
 
-	cu.Status.CertificateResourceVersion = cert.ResourceVersion
+	cu.Status.SecretResourceVersion = cert.ResourceVersion
 	cu.Status.UploadTime = timePtr(metav1.NewTime(body.Result.UploadedOn))
 	cu.Status.UpdateTime = timePtr(metav1.NewTime(body.Result.ModifiedOn))
 	cu.Status.ExpireTime = timePtr(metav1.NewTime(body.Result.ExpiresOn))
-	cu.Status.CloudFlare = &v1alpha1.CloudFlareUploadStatus{
+	cu.Status.Cloudflare = &v1alpha1.CloudflareUploadStatus{
 		CertificateID: body.Result.ID,
 	}
 

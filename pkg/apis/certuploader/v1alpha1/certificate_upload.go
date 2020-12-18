@@ -26,19 +26,19 @@ type CertificateUploadList struct {
 }
 
 type CertificateUploadSpec struct {
-	CertificateName string                `json:"certificateName"`
-	CloudFlare      *CloudFlareUploadSpec `json:"cloudflare,omitempty"`
+	SecretName string                `json:"secretName"`
+	Cloudflare *CloudflareUploadSpec `json:"cloudflare,omitempty"`
 }
 
 type CertificateUploadStatus struct {
-	CertificateResourceVersion string                  `json:"certificateResourceVersion,omitempty"`
-	UploadTime                 *metav1.Time            `json:"uploadTime,omitempty"`
-	UpdateTime                 *metav1.Time            `json:"updateTime,omitempty"`
-	ExpireTime                 *metav1.Time            `json:"expireTime,omitempty"`
-	CloudFlare                 *CloudFlareUploadStatus `json:"cloudflare,omitempty"`
+	SecretResourceVersion string                  `json:"secretResourceVersion,omitempty"`
+	UploadTime            *metav1.Time            `json:"uploadTime,omitempty"`
+	UpdateTime            *metav1.Time            `json:"updateTime,omitempty"`
+	ExpireTime            *metav1.Time            `json:"expireTime,omitempty"`
+	Cloudflare            *CloudflareUploadStatus `json:"cloudflare,omitempty"`
 }
 
-type CloudFlareUploadSpec struct {
+type CloudflareUploadSpec struct {
 	Email             string                   `json:"email"`
 	APITokenSecretRef corev1.SecretKeySelector `json:"apiTokenSecretRef"`
 	BundleMethod      string                   `json:"bundleMethod,omitempty"`
@@ -46,6 +46,6 @@ type CloudFlareUploadSpec struct {
 	ZoneID            string                   `json:"zoneId"`
 }
 
-type CloudFlareUploadStatus struct {
+type CloudflareUploadStatus struct {
 	CertificateID string `json:"certificateId,omitempty"`
 }

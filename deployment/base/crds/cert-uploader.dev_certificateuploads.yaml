@@ -30,8 +30,6 @@ spec:
             type: object
           spec:
             properties:
-              certificateName:
-                type: string
               cloudflare:
                 properties:
                   apiTokenSecretRef:
@@ -62,13 +60,13 @@ spec:
                 - email
                 - zoneId
                 type: object
+              secretName:
+                type: string
             required:
-            - certificateName
+            - secretName
             type: object
           status:
             properties:
-              certificateResourceVersion:
-                type: string
               cloudflare:
                 properties:
                   certificateId:
@@ -76,6 +74,8 @@ spec:
                 type: object
               expireTime:
                 format: date-time
+                type: string
+              secretResourceVersion:
                 type: string
               updateTime:
                 format: date-time
