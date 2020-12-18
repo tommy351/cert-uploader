@@ -5,6 +5,7 @@ import (
 
 	"github.com/tommy351/cert-uploader/internal/controller"
 	"github.com/tommy351/cert-uploader/pkg/apis/certuploader/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -23,7 +24,10 @@ func init() {
 
 func main() {
 	scheme := runtime.NewScheme()
-	sb := runtime.NewSchemeBuilder(v1alpha1.AddToScheme)
+	sb := runtime.NewSchemeBuilder(
+		corev1.AddToScheme,
+		v1alpha1.AddToScheme,
+	)
 
 	if err := sb.AddToScheme(scheme); err != nil {
 		log.Log.Error(err, "failed to register schemes")
