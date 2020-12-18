@@ -40,11 +40,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	reconciler := &controller.Reconciler{
+	cur := &controller.CertificateUploadReconciler{
 		Client: mgr.GetClient(),
 	}
 
-	if err := reconciler.SetupWithManager(mgr); err != nil {
+	if err := cur.SetupWithManager(mgr); err != nil {
+		log.Log.Error(err, "failed to setup reconciler")
+		os.Exit(1)
+	}
+
+	sr := &controller.SecretReconciler{
+		Client:                      mgr.GetClient(),
+		CertificateUploadReconciler: cur,
+	}
+
+	if err := sr.SetupWithManager(mgr); err != nil {
 		log.Log.Error(err, "failed to setup reconciler")
 		os.Exit(1)
 	}
