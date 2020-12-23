@@ -81,6 +81,13 @@ func (r *CertificateUploadReconciler) upload(ctx context.Context, cu *v1alpha1.C
 		return reconcile.Result{}, nil
 	}
 
+	if cu.Status.SecretResourceVersion == cert.ResourceVersion {
+		logger.V(1).Info("Skip because the resource version is not changed")
+		r.EventRecorder.Eventf(cu, corev1.EventTypeNormal, ReasonCertUnchanged, `Skip because secret "%s/%s" not changed`, cert.Namespace, cert.Name)
+
+		return reconcile.Result{}, nil
+	}
+
 	if cu.Spec.Cloudflare != nil {
 		return r.uploadToCloudflare(ctx, cu, cert)
 	}

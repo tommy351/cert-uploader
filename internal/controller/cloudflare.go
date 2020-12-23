@@ -70,14 +70,6 @@ func (r *CertificateUploadReconciler) newCloudflareClient(ctx context.Context, c
 
 func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu *v1alpha1.CertificateUpload, cert *corev1.Secret) (reconcile.Result, error) {
 	logger := log.FromContext(ctx)
-
-	if cu.Status.SecretResourceVersion == cert.ResourceVersion {
-		logger.V(1).Info("Skip because the resource version is not changed")
-		r.EventRecorder.Eventf(cu, corev1.EventTypeNormal, ReasonCertUnchanged, `Skip because secret "%s/%s" not changed`, cert.Namespace, cert.Name)
-
-		return reconcile.Result{}, nil
-	}
-
 	api, retryable, err := r.newCloudflareClient(ctx, cu)
 	if err != nil {
 		logger.Error(err, "Failed to create Cloudflare client")
