@@ -45,7 +45,8 @@ func main() {
 	}
 
 	cur := &controller.CertificateUploadReconciler{
-		Client: mgr.GetClient(),
+		Client:        mgr.GetClient(),
+		EventRecorder: mgr.GetEventRecorderFor("cert-uploader"),
 	}
 
 	if err := cur.SetupWithManager(mgr); err != nil {

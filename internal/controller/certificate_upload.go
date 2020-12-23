@@ -18,6 +18,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+const (
+	ReasonCertNotFound     = "CertNotFound"
+	ReasonInvalidCertType  = "InvalidCertType"
+	ReasonCertUnchanged    = "CertUnchanged"
+	ReasonAPITokenNotFound = "APITokenNotFound"
+	ReasonUploaded         = "Uploaded"
+	ReasonFailed           = "Failed"
+)
+
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cert-uploader.dev,resources=certificateuploads,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cert-uploader.dev,resources=certificateuploads/status,verbs=get;update;patch
@@ -46,19 +55,17 @@ func (r *CertificateUploadReconciler) Reconcile(ctx context.Context, req reconci
 }
 
 func (r *CertificateUploadReconciler) upload(ctx context.Context, cu *v1alpha1.CertificateUpload) (reconcile.Result, error) {
-	logger := log.FromContext(ctx,
-		"secretNamespace", cu.Namespace,
-		"secretName", cu.Spec.SecretName,
-	)
-	ctx = log.IntoContext(ctx, logger)
+	logger := log.FromContext(ctx)
 	cert := new(corev1.Secret)
-
-	if err := r.Client.Get(ctx, types.NamespacedName{
+	certKey := types.NamespacedName{
 		Namespace: cu.Namespace,
 		Name:      cu.Spec.SecretName,
-	}, cert); err != nil {
+	}
+
+	if err := r.Client.Get(ctx, certKey, cert); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Error(err, "Secret does not exist")
+			r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonCertNotFound, "Secret %q does not exist", certKey)
 
 			return reconcile.Result{}, nil
 		}
@@ -68,6 +75,7 @@ func (r *CertificateUploadReconciler) upload(ctx context.Context, cu *v1alpha1.C
 
 	if cert.Type != corev1.SecretTypeTLS {
 		logger.Info("Secret type must be kubernetes.io/tls")
+		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonInvalidCertType, "Type of secret %q is not %s", certKey, corev1.SecretTypeTLS)
 
 		return reconcile.Result{}, nil
 	}

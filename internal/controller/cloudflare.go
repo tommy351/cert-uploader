@@ -56,22 +56,27 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 
 	if cu.Status.SecretResourceVersion == cert.ResourceVersion {
 		logger.V(1).Info("Skip because the resource version is not changed")
+		r.EventRecorder.Eventf(cu, corev1.EventTypeNormal, ReasonCertUnchanged, `Skip because secret "%s/%s" not changed`, cert.Namespace, cert.Name)
 
 		return reconcile.Result{}, nil
 	}
 
 	apiTokenRef := cu.Spec.Cloudflare.APITokenSecretRef
 	apiToken := new(corev1.Secret)
-
-	if err := r.Client.Get(ctx, types.NamespacedName{
+	apiTokenKey := types.NamespacedName{
 		Namespace: cu.Namespace,
 		Name:      apiTokenRef.Name,
-	}, apiToken); err != nil {
+	}
+
+	if err := r.Client.Get(ctx, apiTokenKey, apiToken); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Error(err, "API token secret does not exist", "apiTokenRef", apiTokenRef)
+			r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonAPITokenNotFound, "Secret %q does not exist", apiTokenKey)
 
 			return reconcile.Result{}, nil
 		}
+
+		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Failed to get API token: %v", err)
 
 		return reconcile.Result{}, fmt.Errorf("failed to get API token: %w", err)
 	}
@@ -111,11 +116,14 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 
 	if err := json.NewEncoder(&buf).Encode(&reqBody); err != nil {
 		logger.Error(err, "Failed to encode JSON")
+		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Failed to encode JSON: %v", err)
 
 		return reconcile.Result{}, nil
 	}
 
 	if err != nil {
+		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Failed to create HTTP request: %v", err)
+
 		return reconcile.Result{}, fmt.Errorf("failed to create http request: %w", err)
 	}
 
@@ -127,6 +135,8 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
+		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "HTTP request failed: %v", err)
+
 		return reconcile.Result{}, fmt.Errorf("request failed: %w", err)
 	}
 
@@ -135,6 +145,8 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 	var body cloudflareCustomCertificateResponse
 
 	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Failed to decode HTTP response: %v", err)
+
 		return reconcile.Result{}, fmt.Errorf("decode failed: %w", err)
 	}
 
@@ -142,6 +154,7 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 
 	if len(body.Errors) > 0 {
 		logger.Info("Cloudflare response errors", "responseErrors", body.Errors)
+		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Cloudflare response errors: %v", body.Errors)
 
 		return reconcile.Result{}, nil
 	}
@@ -155,8 +168,12 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 	}
 
 	if err := r.Client.Status().Update(ctx, cu); err != nil {
+		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Failed to update status: %v", err)
+
 		return reconcile.Result{}, fmt.Errorf("failed to update resource status: %w", err)
 	}
+
+	r.EventRecorder.Event(cu, corev1.EventTypeNormal, ReasonUploaded, "Uploaded to Cloudflare")
 
 	return reconcile.Result{}, nil
 }
