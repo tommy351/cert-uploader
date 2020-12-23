@@ -39,11 +39,12 @@ type CertificateUploadStatus struct {
 }
 
 type CloudflareUploadSpec struct {
-	Email             string                   `json:"email"`
-	APITokenSecretRef corev1.SecretKeySelector `json:"apiTokenSecretRef"`
-	BundleMethod      string                   `json:"bundleMethod,omitempty"`
-	Type              string                   `json:"type,omitempty"`
-	ZoneID            string                   `json:"zoneId"`
+	ZoneID            string                    `json:"zoneId"`
+	Email             string                    `json:"email,omitempty"`
+	APIKeySecretRef   *corev1.SecretKeySelector `json:"apiKeySecretRef,omitempty"`
+	APITokenSecretRef *corev1.SecretKeySelector `json:"apiTokenSecretRef,omitempty"`
+	BundleMethod      string                    `json:"bundleMethod,omitempty"`
+	Type              string                    `json:"type,omitempty"`
 }
 
 type CloudflareUploadStatus struct {
