@@ -123,9 +123,10 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 	}
 
 	if err != nil {
+		logger.Error(err, "Failed to create HTTP request")
 		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Failed to create HTTP request: %v", err)
 
-		return reconcile.Result{}, fmt.Errorf("failed to create http request: %w", err)
+		return reconcile.Result{}, nil
 	}
 
 	req.Header.Set("Content-Type", "application/json")
