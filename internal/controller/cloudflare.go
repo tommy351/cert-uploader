@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/tommy351/cert-uploader/pkg/apis/certuploader/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -30,18 +30,6 @@ type cloudflareCustomCertificateResponse struct {
 	Success bool                              `json:"success"`
 	Errors  []cloudFlareResponseError         `json:"errors"`
 	Result  cloudFlareCustomCertificateResult `json:"result"`
-}
-
-type cloudflareResponseErrors []cloudFlareResponseError
-
-func (c cloudflareResponseErrors) Error() string {
-	lines := make([]string, len(c))
-
-	for i, e := range c {
-		lines[i] = fmt.Sprintf("%d: %s", e.Code, e.Message)
-	}
-
-	return fmt.Sprintf("cloudflare response errors: \n%s", strings.Join(lines, "\n"))
 }
 
 type cloudFlareResponseError struct {
@@ -79,6 +67,12 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 		Namespace: cu.Namespace,
 		Name:      apiTokenRef.Name,
 	}, apiToken); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Error(err, "API token secret does not exist", "apiTokenRef", apiTokenRef)
+
+			return reconcile.Result{}, nil
+		}
+
 		return reconcile.Result{}, fmt.Errorf("failed to get API token: %w", err)
 	}
 
@@ -96,14 +90,29 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 	}
 
 	if cu.Status.Cloudflare != nil {
-		req, err = http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/zones/%s/custom_certificates/%s", cloudflareEndpoint, cu.Spec.Cloudflare.ZoneID, cu.Status.Cloudflare.CertificateID), &buf)
+		req, err = http.NewRequest(
+			http.MethodPatch,
+			fmt.Sprintf("%s/zones/%s/custom_certificates/%s", cloudflareEndpoint, cu.Spec.Cloudflare.ZoneID, cu.Status.Cloudflare.CertificateID),
+			&buf,
+		)
 	} else {
 		reqBody.Type = ""
-		req, err = http.NewRequest(http.MethodPost, fmt.Sprintf("%s/zones/%s/custom_certificates", cloudflareEndpoint, cu.Spec.Cloudflare.ZoneID), &buf)
+		req, err = http.NewRequest(
+			http.MethodPost,
+			fmt.Sprintf("%s/zones/%s/custom_certificates", cloudflareEndpoint, cu.Spec.Cloudflare.ZoneID),
+			&buf,
+		)
 	}
 
+	logger = logger.WithValues(
+		"requestMethod", req.Method,
+		"requestUrl", req.URL,
+	)
+
 	if err := json.NewEncoder(&buf).Encode(&reqBody); err != nil {
-		return reconcile.Result{}, fmt.Errorf("encode failed: %w", err)
+		logger.Error(err, "Failed to encode JSON")
+
+		return reconcile.Result{}, nil
 	}
 
 	if err != nil {
@@ -114,7 +123,7 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 	req.Header.Set("X-Auth-Email", cu.Spec.Cloudflare.Email)
 	req.Header.Set("X-Auth-Key", string(apiToken.Data[apiTokenRef.Key]))
 
-	logger.V(1).Info("About to send request to Cloudflare", "requestMethod", req.Method, "requestUrl", req.URL)
+	logger.V(1).Info("Sending request to Cloudflare")
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -132,7 +141,9 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 	logger.V(1).Info("Request sent to Cloudflare", "responseBody", body, "responseStatus", res.StatusCode)
 
 	if len(body.Errors) > 0 {
-		return reconcile.Result{}, cloudflareResponseErrors(body.Errors)
+		logger.Info("Cloudflare response errors", "responseErrors", body.Errors)
+
+		return reconcile.Result{}, nil
 	}
 
 	cu.Status.SecretResourceVersion = cert.ResourceVersion
