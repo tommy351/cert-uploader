@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -142,9 +143,16 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 
 	defer res.Body.Close()
 
+	resBody, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Failed to read response body: %w", err)
+
+		return reconcile.Result{}, fmt.Errorf("failed to read response body: %w", err)
+	}
+
 	var body cloudflareCustomCertificateResponse
 
-	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+	if err := json.Unmarshal(resBody, &body); err != nil {
 		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Failed to decode HTTP response: %v", err)
 
 		return reconcile.Result{}, fmt.Errorf("decode failed: %w", err)
@@ -152,9 +160,9 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 
 	logger.V(1).Info("Request sent to Cloudflare", "responseBody", body, "responseStatus", res.StatusCode)
 
-	if len(body.Errors) > 0 {
-		logger.Info("Cloudflare response errors", "responseErrors", body.Errors)
-		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Cloudflare response errors: %v", body.Errors)
+	if !body.Success {
+		logger.Info("Cloudflare request failed", "responseErrors", body.Errors)
+		r.EventRecorder.Event(cu, corev1.EventTypeWarning, ReasonFailed, "Cloudflare request failed")
 
 		return reconcile.Result{}, nil
 	}
