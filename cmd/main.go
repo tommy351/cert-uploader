@@ -5,6 +5,7 @@ import (
 
 	"github.com/tommy351/cert-uploader/internal/controller"
 	"github.com/tommy351/cert-uploader/pkg/apis/certuploader/v1alpha1"
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -19,7 +20,14 @@ import (
 
 // nolint: gochecknoinits
 func init() {
-	log.SetLogger(zap.New())
+	log.SetLogger(zap.New(func(opts *zap.Options) {
+		if !opts.Development {
+			zap.JSONEncoder(func(ec *zapcore.EncoderConfig) {
+				ec.EncodeTime = zapcore.ISO8601TimeEncoder
+				ec.TimeKey = "time"
+			})(opts)
+		}
+	}))
 }
 
 func main() {
