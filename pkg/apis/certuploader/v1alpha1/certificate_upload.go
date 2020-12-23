@@ -39,12 +39,17 @@ type CertificateUploadStatus struct {
 }
 
 type CloudflareUploadSpec struct {
-	ZoneID            string                    `json:"zoneId"`
-	Email             string                    `json:"email,omitempty"`
-	APIKeySecretRef   *corev1.SecretKeySelector `json:"apiKeySecretRef,omitempty"`
-	APITokenSecretRef *corev1.SecretKeySelector `json:"apiTokenSecretRef,omitempty"`
-	BundleMethod      string                    `json:"bundleMethod,omitempty"`
-	Type              string                    `json:"type,omitempty"`
+	ZoneID            string                     `json:"zoneId"`
+	Email             string                     `json:"email,omitempty"`
+	APIKeySecretRef   *corev1.SecretKeySelector  `json:"apiKeySecretRef,omitempty"`
+	APITokenSecretRef *corev1.SecretKeySelector  `json:"apiTokenSecretRef,omitempty"`
+	BundleMethod      string                     `json:"bundleMethod,omitempty"`
+	Type              string                     `json:"type,omitempty"`
+	GeoRestrictions   *CloudflareGeoRestrictions `json:"geoRestrictions,omitempty"`
+}
+
+type CloudflareGeoRestrictions struct {
+	Label string `json:"label,omitempty"`
 }
 
 type CloudflareUploadStatus struct {

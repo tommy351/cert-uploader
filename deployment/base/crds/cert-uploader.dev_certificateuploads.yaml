@@ -66,6 +66,11 @@ spec:
                     type: string
                   email:
                     type: string
+                  geoRestrictions:
+                    properties:
+                      label:
+                        type: string
+                    type: object
                   type:
                     type: string
                   zoneId:

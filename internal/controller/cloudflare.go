@@ -91,6 +91,12 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 		Type:         cu.Spec.Cloudflare.Type,
 	}
 
+	if gr := cu.Spec.Cloudflare.GeoRestrictions; gr != nil {
+		sslOptions.GeoRestrictions = &cloudflare.ZoneCustomSSLGeoRestrictions{
+			Label: gr.Label,
+		}
+	}
+
 	if cu.Status.Cloudflare != nil {
 		sslOptions.Type = ""
 		result, err = api.UpdateSSL(zoneID, cu.Status.Cloudflare.CertificateID, sslOptions)
