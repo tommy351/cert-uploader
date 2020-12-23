@@ -19,7 +19,7 @@ spec:
   - additionalPrinterColumns:
     - jsonPath: .spec.secretName
       name: Secret
-      type: date
+      type: string
     - jsonPath: .status.uploadTime
       name: Upload
       type: date
