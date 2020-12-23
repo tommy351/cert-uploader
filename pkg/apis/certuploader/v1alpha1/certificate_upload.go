@@ -7,6 +7,9 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Secret",type=date,JSONPath=`.spec.secretName`
+// +kubebuilder:printcolumn:name="Upload",type=date,JSONPath=`.status.uploadTime`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 type CertificateUpload struct {
 	metav1.TypeMeta   `json:",inline"`

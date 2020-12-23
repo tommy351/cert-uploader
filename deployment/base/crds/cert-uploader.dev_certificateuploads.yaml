@@ -16,7 +16,17 @@ spec:
     singular: certificateupload
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.secretName
+      name: Secret
+      type: date
+    - jsonPath: .status.uploadTime
+      name: Upload
+      type: date
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         properties:
