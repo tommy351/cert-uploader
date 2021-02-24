@@ -97,16 +97,29 @@ func (r *CertificateUploadReconciler) uploadToCloudflare(ctx context.Context, cu
 		}
 	}
 
-	if cu.Status.Cloudflare != nil {
+	var (
+		action string
+		certID string
+	)
+
+	if cu.Status.Cloudflare != nil && cu.Status.Cloudflare.CertificateID != "" {
+		if ssl, err := api.SSLDetails(zoneID, cu.Status.Cloudflare.CertificateID); err == nil {
+			certID = ssl.ID
+		}
+	}
+
+	if certID != "" {
 		sslOptions.Type = ""
-		result, err = api.UpdateSSL(zoneID, cu.Status.Cloudflare.CertificateID, sslOptions)
+		action = "update"
+		result, err = api.UpdateSSL(zoneID, certID, sslOptions)
 	} else {
+		action = "create"
 		result, err = api.CreateSSL(zoneID, sslOptions)
 	}
 
 	if err != nil {
-		logger.Error(err, "Failed to upload certificate to Cloudflare")
-		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Failed to upload certificate to Cloudflare: %v", err)
+		logger.Error(err, fmt.Sprintf("Failed to %s certificate on Cloudflare", action))
+		r.EventRecorder.Eventf(cu, corev1.EventTypeWarning, ReasonFailed, "Failed to %s certificate on Cloudflare: %v", action, err)
 
 		return reconcile.Result{}, nil
 	}
